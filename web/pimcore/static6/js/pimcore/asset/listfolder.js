@@ -108,9 +108,9 @@ pimcore.asset.listfolder = Class.create({
             boxLabel: t("only_children"),
             listeners: {
                 "change" : function (field, checked) {
-                    this.grid.filters.clearFilters();
-
                     this.store.getProxy().setExtraParam("only_direct_children", checked);
+
+                    this.grid.filters.clearFilters();
 
                     this.onlyDirectChildren = checked;
                     this.pagingtoolbar.moveFirst();
