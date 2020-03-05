@@ -41,11 +41,9 @@ class EventDispatcher implements EventDispatcherInterface
             ));
         }
 
-        if (Kernel::VERSION_ID >= 40300) {
-            $this->eventDispatcher->dispatch($event, $eventName);
-        } else {
-            $this->eventDispatcher->dispatch($eventName, $event);
-        }
+        return Kernel::VERSION_ID >= 40300
+            ? $this->eventDispatcher->dispatch($event, $eventName)
+            : $this->eventDispatcher->dispatch($eventName, $event);
     }
 
     public function addListener($eventName, $listener, $priority = 0)
