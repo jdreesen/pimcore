@@ -2,35 +2,48 @@
 
 namespace Pimcore\Event;
 
+use Symfony\Component\EventDispatcher\Event;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpKernel\Kernel;
-use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Symfony\Contracts\EventDispatcher\Event as ContractsEvent;
 
 class EventDispatcher implements EventDispatcherInterface
 {
-    /** @var EventDispatcherInterface */
+    /**
+     * @var EventDispatcherInterface
+     */
     private $eventDispatcher;
 
-    public function __construct($eventDispatcher)
+    public function __construct(EventDispatcherInterface $eventDispatcher)
     {
         $this->eventDispatcher = $eventDispatcher;
     }
 
-    public function dispatch($event/*, $eventName = null*/) {
-        $eventName = 1 < \func_num_args() ? func_get_arg(1) : null;
-        if(\version_compare(Kernel::VERSION, '4.3') >= 0) {
-            if(is_string($event) && is_object($eventName)) {
-                $tmp = $eventName;
-                $eventName = $event;
-                $event = $tmp;
+    public function dispatch($event, $eventName = null)
+    {
+        if (\is_object($event)) {
+            $eventName = $eventName ?? \get_class($event);
+        } elseif (\is_string($event) && (null === $eventName || $eventName instanceof ContractsEvent || $eventName instanceof Event)) {
+            if (Kernel::VERSION_ID >= 40300) {
+                @trigger_error(sprintf(
+                    'Calling the "%s::dispatch()" method with the event name as the first argument is deprecated since Symfony 4.3, pass it as the second argument and provide the event object as the first argument instead.',
+                    EventDispatcherInterface::class
+                ), E_USER_DEPRECATED);
             }
+
+            [$eventName, $event] = [$event, $eventName ?? new Event()];
+        } else {
+            throw new \TypeError(sprintf(
+                'Argument 1 passed to "%s::dispatch()" must be %s, %s given.',
+                Kernel::VERSION_ID >= 40300 ? 'an object' : 'a string',
+                EventDispatcherInterface::class, \is_object($event) ? \get_class($event) : \gettype($event)
+            ));
+        }
+
+        if (Kernel::VERSION_ID >= 40300) {
             $this->eventDispatcher->dispatch($event, $eventName);
         } else {
-            if(is_string($eventName) && is_object($event)) {
-                $tmp = $eventName;
-                $eventName = $event;
-                $event = $tmp;
-            }
             $this->eventDispatcher->dispatch($eventName, $event);
         }
     }
@@ -70,22 +83,17 @@ class EventDispatcher implements EventDispatcherInterface
         return $this->eventDispatcher->hasListeners($eventName);
     }
 
-    public function __call($method, $args)
+    /**
+     * Proxies all method calls to the original event dispatcher.
+     */
+    public function __call($method, $arguments)
     {
-        if (is_callable([$this->eventDispatcher, $method])) {
-            return call_user_func_array(array($this->eventDispatcher, $method), $args);
-        }
-        throw new \Exception(
-            'Undefined method - ' . get_class($this->eventDispatcher) . '::' . $method
-        );
+        return $this->eventDispatcher->{$method}(...$arguments);
     }
 
     public function __get($property)
     {
-        if (property_exists($this->eventDispatcher, $property)) {
-            return $this->eventDispatcher->$property;
-        }
-        return null;
+        return $this->eventDispatcher->$property ?? null;
     }
 
     public function __isset($property)
@@ -96,6 +104,5 @@ class EventDispatcher implements EventDispatcherInterface
     public function __set($property, $value)
     {
         $this->eventDispatcher->$property = $value;
-        return $this;
     }
 }
